@@ -9,6 +9,19 @@ type ProfileLookup = (address: string) => Promise<WalletProfile>;
 
 const INDEX = new URL("../public/index.html", import.meta.url);
 
+// Wallet lookups cost Solami API calls; when the dashboard is public, cap them per visitor.
+const LOOKUPS_PER_MINUTE = 20;
+const lookups = new Map<string, number[]>();
+function allowLookup(ip: string): boolean {
+  const now = Date.now();
+  const recent = (lookups.get(ip) ?? []).filter((t) => now - t < 60_000);
+  if (recent.length >= LOOKUPS_PER_MINUTE) return false;
+  recent.push(now);
+  lookups.set(ip, recent);
+  if (lookups.size > 10_000) lookups.clear();
+  return true;
+}
+
 export function startServer(port: number, lookupProfile: ProfileLookup) {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -34,6 +47,11 @@ export function startServer(port: number, lookupProfile: ProfileLookup) {
 
       const wallet = url.pathname.match(/^\/api\/wallet\/([1-9A-HJ-NP-Za-km-z]{32,44})$/);
       if (wallet) {
+        const ip = String(req.headers["x-real-ip"] ?? req.socket.remoteAddress ?? "");
+        if (!allowLookup(ip)) {
+          json(res, { error: "Too many wallet lookups, try again in a minute." }, 429);
+          return;
+        }
         json(res, await lookupProfile(wallet[1]));
         return;
       }
@@ -60,7 +78,9 @@ export function startServer(port: number, lookupProfile: ProfileLookup) {
     }
   });
 
-  server.listen(port, () => console.log(`[http] dashboard on http://localhost:${port}`));
+  // HOST=127.0.0.1 when running behind a reverse proxy.
+  const host = process.env.HOST || "0.0.0.0";
+  server.listen(port, host, () => console.log(`[http] dashboard on http://${host === "0.0.0.0" ? "localhost" : host}:${port}`));
   return server;
 }
 
