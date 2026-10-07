@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whale Radar</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐋</text></svg>">
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #121821; --panel-2: #18202b; --line: #232d3a;
+    --text: #e6edf3; --muted: #8b98a8; --accent: #4cc9f0;
+    --buy: #2ecc71; --sell: #ff5c5c; --warn: #f5b942;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 18px; margin: 0; letter-spacing: .3px; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  .status { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+  .dot.open { background: var(--buy); box-shadow: 0 0 0 0 var(--buy); animation: pulse 2s infinite; }
+  .dot.closed { background: var(--sell); }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(46,204,113,.6);} 100% { box-shadow: 0 0 0 8px rgba(46,204,113,0);} }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 16px 20px 0; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .kpi .label { color: var(--muted); font-size: 12px; }
+  .kpi .value { font-size: 22px; font-weight: 650; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .bar { height: 6px; border-radius: 3px; background: var(--sell); overflow: hidden; margin-top: 8px; }
+  .bar > i { display: block; height: 100%; background: var(--buy); }
+
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; padding: 16px 20px 24px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0; padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 600; }
+  .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+  table { width: 100%; border-collapse: collapse; }
+  td, th { padding: 8px 10px; text-align: left; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
+  tbody tr { border-bottom: 1px solid var(--line); cursor: pointer; }
+  tbody tr:hover { background: var(--panel-2); }
+  tr.new { animation: flash 1.6s ease-out; }
+  @keyframes flash { from { background: rgba(76,201,240,.18); } to { background: transparent; } }
+  .feed { max-height: calc(100vh - 230px); overflow: auto; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .buy { color: var(--buy); } .sell { color: var(--sell); }
+  .mono { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .tok { display: inline-flex; align-items: center; gap: 6px; }
+  .tok img { width: 18px; height: 18px; border-radius: 50%; background: var(--line); }
+  .big { font-weight: 700; }
+  .whale-size { color: var(--warn); }
+
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; border: 1px solid currentColor; }
+  .k-exchange { color: #f5b942; } .k-protocol { color: #a78bfa; } .k-bot { color: #ff8a65; }
+  .k-pro-trader { color: #2ecc71; } .k-whale { color: #4cc9f0; } .k-fresh { color: #f06292; }
+  .k-trader { color: #8b98a8; } .k-unknown, .k-loading { color: #5b6878; }
+  .eye { color: var(--accent); }
+
+  .list { list-style: none; margin: 0; padding: 4px 0; }
+  .list li { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px 10px; padding: 8px 14px; cursor: pointer; }
+  .list li:hover { background: var(--panel-2); }
+  .flow { grid-column: 1 / -1; height: 4px; background: var(--line); border-radius: 2px; position: relative; }
+  .flow > i { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+  .empty { color: var(--muted); padding: 14px; font-size: 13px; }
+
+  #drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100%); background: var(--panel); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform .2s; padding: 18px; overflow: auto; z-index: 10; }
+  #drawer.open { transform: none; }
+  #drawer .close { float: right; background: none; border: 0; color: var(--muted); font-size: 22px; cursor: pointer; }
+  #drawer h3 { margin: 0 0 4px; font-size: 16px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
+  .cell { background: var(--panel-2); border-radius: 8px; padding: 10px; }
+  .cell .label { color: var(--muted); font-size: 11px; }
+  .cell .value { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  a { color: var(--accent); text-decoration: none; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .tag { background: var(--panel-2); color: var(--muted); border-radius: 6px; padding: 2px 8px; font-size: 12px; }
+
+  footer { color: var(--muted); font-size: 12px; padding: 0 20px 20px; }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; padding: 16px; }
+    .kpis { grid-template-columns: repeat(2, 1fr); padding: 16px 16px 0; }
+    .feed { max-height: 60vh; }
+    .hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <span style="font-size:22px">🐋</span>
+  <div>
+    <h1>Whale Radar</h1>
+    <div class="sub">Every big trade on Solana, live, and who's behind it · powered by Solami</div>
+  </div>
+  <div class="status"><span class="dot" id="dot"></span><span id="status">connecting</span></div>
+</header>
+
+<div class="kpis">
+  <div class="kpi"><div class="label">Whale volume (1h)</div><div class="value" id="k-vol">–</div></div>
+  <div class="kpi"><div class="label">Whale trades (1h)</div><div class="value" id="k-trades">–</div></div>
+  <div class="kpi"><div class="label">Unique whales (1h)</div><div class="value" id="k-wallets">–</div></div>
+  <div class="kpi"><div class="label">Buy pressure (1h)</div><div class="value" id="k-buy">–</div><div class="bar"><i id="k-bar" style="width:50%"></i></div></div>
+</div>
+
+<main>
+  <section>
+    <h2>Live whale feed</h2>
+    <div class="feed">
+      <table>
+        <thead><tr><th>Time</th><th>Side</th><th class="num">Size</th><th>Token</th><th>Who</th><th class="hide-sm">Wallet</th><th class="hide-sm">DEX</th></tr></thead>
+        <tbody id="feed"></tbody>
+      </table>
+      <div class="empty" id="feed-empty">Waiting for the first whale…</div>
+    </div>
+  </section>
+  <div class="side">
+    <section>
+      <h2>Where whale money is flowing (1h)</h2>
+      <ul class="list" id="flow"><li class="empty">–</li></ul>
+    </section>
+    <section>
+      <h2>Biggest whales (1h)</h2>
+      <ul class="list" id="whales"><li class="empty">–</li></ul>
+    </section>
+  </div>
+</main>
+<footer>Data: Solami Blur API (live swaps, wallet balance, PnL, funding). Wallet labels are heuristics, not facts.</footer>
+
+<aside id="drawer"></aside>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const trades = [];
+const profiles = new Map();
+const tokens = new Map();
+
+const usd = (n) => n == null ? "–" : (Math.abs(n) >= 1e6 ? "$" + (n / 1e6).toFixed(2) + "M" : Math.abs(n) >= 1e3 ? "$" + (n / 1e3).toFixed(1) + "k" : "$" + n.toFixed(0));
+const short = (a) => a.slice(0, 4) + "…" + a.slice(-4);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ago = (t) => { const s = Math.max(0, Math.floor(Date.now() / 1000 - t)); return s < 60 ? s + "s" : s < 3600 ? Math.floor(s / 60) + "m" : Math.floor(s / 3600) + "h"; };
+
+function badge(addr) {
+  const p = profiles.get(addr);
+  if (!p) return `<span class="badge k-loading">…</span>`;
+  const label = p.entity ?? p.kind.replace("-", " ");
+  return `<span class="badge k-${p.kind}">${esc(label)}</span>`;
+}
+
+function tokenCell(t) {
+  const meta = tokens.get(t.mint) ?? t;
+  const img = meta.image ? `<img src="${esc(meta.image)}" alt="" loading="lazy" onerror="this.remove()">` : "";
+  return `<span class="tok">${img}${meta.symbol ? esc("$" + meta.symbol) : `<span class="mono">${short(t.mint)}</span>`}</span>`;
+}
+
+function row(t, fresh) {
+  const big = t.volumeUsd >= 100000;
+  return `<tr class="${fresh ? "new" : ""}" data-wallet="${t.trader}">
+    <td class="mono" data-time="${t.blockTime}">${ago(t.blockTime)}</td>
+    <td class="${t.side}">${t.side.toUpperCase()}</td>
+    <td class="num ${big ? "big whale-size" : ""}">${usd(t.volumeUsd)}</td>
+    <td>${tokenCell(t)}</td>
+    <td data-badge="${t.trader}">${t.watched ? '<span class="eye" title="watchlist">👁 </span>' : ""}${badge(t.trader)}</td>
+    <td class="mono hide-sm">${short(t.trader)}</td>
+    <td class="mono hide-sm">${esc(t.dex)}</td>
+  </tr>`;
+}
+
+function renderFeed() {
+  $("feed").innerHTML = trades.slice(0, 200).map((t) => row(t, false)).join("");
+  $("feed-empty").style.display = trades.length ? "none" : "block";
+}
+
+function addTrade(t) {
+  trades.unshift(t);
+  if (trades.length > 300) trades.pop();
+  $("feed").insertAdjacentHTML("afterbegin", row(t, true));
+  if ($("feed").children.length > 200) $("feed").lastElementChild.remove();
+  $("feed-empty").style.display = "none";
+}
+
+function refreshBadges(addr) {
+  document.querySelectorAll(`[data-badge="${addr}"]`).forEach((td) => {
+    const eye = td.querySelector(".eye");
+    td.innerHTML = (eye ? eye.outerHTML : "") + badge(addr);
+  });
+  document.querySelectorAll(`[data-whale="${addr}"] .who`).forEach((el) => (el.innerHTML = badge(addr)));
+}
+
+function renderStats(s) {
+  setStatus(s.status);
+  $("k-vol").textContent = usd(s.hour.volumeUsd);
+  $("k-trades").textContent = s.hour.trades.toLocaleString();
+  $("k-wallets").textContent = s.hour.wallets.toLocaleString();
+  const pct = s.hour.volumeUsd ? (s.hour.buyUsd / s.hour.volumeUsd) * 100 : 50;
+  $("k-buy").textContent = pct.toFixed(0) + "% buys";
+  $("k-bar").style.width = pct + "%";
+
+  const maxFlow = Math.max(1, ...s.tokenFlow.map((f) => Math.abs(f.netUsd)));
+  $("flow").innerHTML = s.tokenFlow.length ? s.tokenFlow.map((f) => {
+    const w = (Math.abs(f.netUsd) / maxFlow) * 50;
+    const pos = f.netUsd >= 0;
+    return `<li title="${esc(f.mint)}">
+      <span>${tokenCell(f)} <span class="mono">${f.whales} whale${f.whales > 1 ? "s" : ""}</span></span>
+      <span class="num ${pos ? "buy" : "sell"}">${pos ? "+" : "−"}${usd(Math.abs(f.netUsd))}</span>
+      <span class="flow"><i style="left:${pos ? 50 : 50 - w}%;width:${w}%;background:var(--${pos ? "buy" : "sell"})"></i></span>
+    </li>`;
+  }).join("") : `<li class="empty">No whale trades in the last hour yet.</li>`;
+
+  $("whales").innerHTML = s.topWallets.length ? s.topWallets.map((w) => `<li data-whale="${w.trader}" data-wallet="${w.trader}">
+      <span><span class="who">${badge(w.trader)}</span> <span class="mono">${short(w.trader)}</span></span>
+      <span class="num">${usd(w.volumeUsd)} <span class="mono">· ${w.trades} tx</span></span>
+    </li>`).join("") : `<li class="empty">–</li>`;
+}
+
+function setStatus(s) {
+  $("dot").className = "dot " + s;
+  $("status").textContent = s === "open" ? "live" : s;
+}
+
+async function openWallet(addr) {
+  const d = $("drawer");
+  d.classList.add("open");
+  d.innerHTML = `<button class="close" onclick="closeDrawer()">×</button><h3>${short(addr)}</h3><div class="empty">Loading profile…</div>`;
+  let p = profiles.get(addr);
+  try {
+    p = await fetch(`/api/wallet/${addr}`).then((r) => r.json());
+    if (!p.error) profiles.set(addr, p);
+  } catch {}
+  const mine = trades.filter((t) => t.trader === addr);
+  const wr = p && p.wins != null && (p.wins + p.losses) > 0 ? Math.round((p.wins / (p.wins + p.losses)) * 100) + "%" : "–";
+  d.innerHTML = `<button class="close" onclick="closeDrawer()">×</button>
+    <h3>${p ? badge(addr) : ""} <span class="mono">${short(addr)}</span></h3>
+    <div><a href="https://solscan.io/account/${addr}" target="_blank" rel="noopener">Solscan ↗</a></div>
+    ${p && !p.error ? `
+    <div class="grid2">
+      <div class="cell"><div class="label">Portfolio</div><div class="value">${usd(p.portfolioUsd)}</div></div>
+      <div class="cell"><div class="label">SOL</div><div class="value">${p.solBalance != null ? p.solBalance.toLocaleString(undefined, { maximumFractionDigits: 1 }) : "–"}</div></div>
+      <div class="cell"><div class="label">Total PnL</div><div class="value ${p.pnlUsd >= 0 ? "buy" : "sell"}">${usd(p.pnlUsd)}</div></div>
+      <div class="cell"><div class="label">Win rate</div><div class="value">${wr}</div></div>
+    </div>
+    <div class="label mono">Funded by</div>
+    <div>${p.firstFunder ? `${p.firstFunderEntity ? `<b>${esc(p.firstFunderEntity)}</b> · ` : ""}<a class="mono" href="https://solscan.io/account/${p.firstFunder}" target="_blank" rel="noopener">${short(p.firstFunder)}</a>${p.fundedAt ? ` <span class="mono">${new Date(p.fundedAt * 1000).toISOString().slice(0, 10)}</span>` : ""}` : "<span class='mono'>unknown</span>"}</div>
+    ${p.tags.length ? `<div class="tags">${p.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}
+    <h2 style="padding:16px 0 6px;border:0">Top holdings</h2>
+    <ul class="list">${p.topHoldings.map((h) => `<li style="padding:4px 0;cursor:default"><span>${esc(h.symbol)}</span><span class="num">${usd(h.valueUsd)}</span></li>`).join("") || "<li class='empty'>–</li>"}</ul>`
+    : `<div class="empty">Couldn't load this wallet's profile.</div>`}
+    <h2 style="padding:16px 0 6px;border:0">Whale trades seen</h2>
+    <table><tbody>${mine.map((t) => `<tr onclick="window.open('https://solscan.io/tx/${t.signature}')"><td class="mono">${ago(t.blockTime)}</td><td class="${t.side}">${t.side}</td><td class="num">${usd(t.volumeUsd)}</td><td>${tokenCell(t)}</td></tr>`).join("") || "<tr><td class='empty'>–</td></tr>"}</tbody></table>`;
+}
+function closeDrawer() { $("drawer").classList.remove("open"); }
+
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-wallet]");
+  if (el && !e.target.closest("#drawer")) openWallet(el.dataset.wallet);
+});
+document.addEventListener("keydown", (e) => e.key === "Escape" && closeDrawer());
+setInterval(() => document.querySelectorAll("[data-time]").forEach((td) => (td.textContent = ago(+td.dataset.time))), 5000);
+
+(async () => {
+  const s = await fetch("/api/state").then((r) => r.json());
+  for (const [a, p] of Object.entries(s.profiles)) profiles.set(a, p);
+  trades.push(...s.trades);
+  renderFeed();
+  renderStats(s.stats);
+
+  const es = new EventSource("/events");
+  es.addEventListener("trade", (e) => addTrade(JSON.parse(e.data)));
+  es.addEventListener("profile", (e) => { const p = JSON.parse(e.data); profiles.set(p.address, p); refreshBadges(p.address); });
+  es.addEventListener("token", (e) => { const t = JSON.parse(e.data); tokens.set(t.mint, t); renderFeed(); });
+  es.addEventListener("stats", (e) => renderStats(JSON.parse(e.data)));
+  es.addEventListener("status", (e) => setStatus(JSON.parse(e.data)));
+  es.onerror = () => setStatus("closed");
+})();
+</script>
+</body>
+</html>

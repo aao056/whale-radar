@@ -1,0 +1,21 @@
+{
+  "name": "whale-radar",
+  "version": "0.1.0",
+  "description": "Live Solana whale tracker: big trades, who made them, and what kind of wallet it is. Powered by Solami.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=23.6"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "dev": "node --watch src/index.ts",
+    "mock": "MOCK=1 node src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  },
+  "license": "MIT"
+}
