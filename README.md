@@ -2,6 +2,8 @@
 
 **Every big trade on Solana, live, and who's behind it.**
 
+🔴 **Live demo:** https://whale-radar.5-78-66-254.sslip.io
+
 Whale Radar watches the whole Solana DEX market for large trades, then answers the question every trader asks next: *who was that?* For each whale it builds a profile (portfolio, PnL, win rate, who funded the wallet) and labels it: exchange, bot, pro trader, fresh wallet, or whale. You get a live dashboard and, optionally, Telegram alerts.
 
 Built for the Colosseum **Crypto World's Fair** hackathon ([project page](https://colosseum.com/arena/projects/whale-radar)), on [Solami](https://solami.dev).
